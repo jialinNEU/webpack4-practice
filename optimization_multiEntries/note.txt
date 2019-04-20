@@ -1,0 +1,149 @@
+## 提升Webpack打包速度
+
+1. 更新Webpack，Node，npm或yarn的版本
+2. 在尽可能少的模块上使用Loader
+3. Plugin尽可能精简并保证可靠
+4. resolve参数合理配置
+
+// webpack.config.js
+resolve: {
+  // 在import的目录下，先找以js结尾的文件，再找以jsx结尾的文件
+  extensions: ['.js', '.jsx'],
+  // 当引入一个目录的时候，先寻找以index开头的文件，再寻找以child开头的文件
+  mainFiles: ['index', 'child'],
+  // 当遇到delllee的时候，将它指向特定目录
+  alias: {
+    delllee: path.resolve(path.resolve(__dirname, '../src'))
+  }
+}
+
+5. 使用DllPlugin提高打包速度，使第三方模块只打包依次
+
+// 见webpack.dll.js，它将react, react-dom和lodash打包到dll文件夹下
+
+1）运行wepback --config webpack.dll.js
+2）npm install --save-dev add-asset-html-webpack-plugin
+
+// webpack.config.js
+const AddAssetHtmlWebpackPlugin = require('add-asset-html-webpack-plugin');
+
+plugins: [
+  // ...
+  new AddAssetHtmlWebpackPlugin({
+    filepath: path.resolve(__dirname, '../dll/vendors.dll.js')
+  }),
+  new AddAssetHtmlWebpackPlugin({
+    filepath: path.resolve(__dirname, '../dll/react.dll.js')
+  }),
+]
+
+3）使用webpack.DllPlugin
+
+// 见webpack.dll.js
+
+4）在webpack.config.js中使用生成的manifest文件
+
+plugins: [
+  // ...
+  webpack.DllReferencePlugin({
+    manifest: path.resolve(__dirname, '../dll/vendors.manifest.json')
+  }),
+  webpack.DllReferencePlugin({
+    manifest: path.resolve(__dirname, '../dll/react.manifest.json')
+  })
+]
+
+5）代码修改
+
+// webpack.config.js
+
+cosnt fs = require('fs');
+const plugins = [];
+
+const files = fs.readdirSync(path.resolve(__dirname, '../dll'));
+files.forEach(file => {
+  if (/.*\.dll.js/.test(file)) {
+    plugins.push(new AddAssetHtmlWebpackPlugin({
+      filepath: path.resolve(__dirname, '../dll', file)
+    }));
+  }
+  if (/.*\.manifest.json/.test(file)) {
+    plugins.push(  webpack.DllReferencePlugin({
+      manifest: path.resolve(__dirname, '../dll', file)
+    }));
+  }
+})
+
+
+6. 控制包文件的大小
+- 按需加载
+- SplitChunksPlugin：将大文件拆分成小文件
+
+7. Thread-loader，Parallel-webpack（多页打包），happypack多进程打包
+
+8. 合理使用sourceMap
+- sourceMap越详细，打包速度越慢
+
+9. 结合stats分析打包结果
+- stats文件是描述打包情况的文件
+
+10. 开发环境webpack devServer内存编译
+- 内存的读取会比硬盘快
+
+11. 剔除开发环境中的无用插件
+- 如：开发环境下无需代码压缩
+
+
+
+
+## 多页面打包
+
+1. 修改webpack配置文件
+
+// webpack.config.js
+
+entry: {
+  main: './src/index.js',
+  list: './src/list.js'
+}
+
+const plugins = [
+  new HtmlWebpackPlugin({
+    template: 'src/index.html',
+    filename: 'index.html',
+    // 该html文件要引入的打包生成的js文件
+    chunks: ['runtime', 'vendors', 'main']
+  }),
+  new HtmlWebpackPlugin({
+    template: 'src/index.html',
+    filename: 'list.html',
+    chunks: ['runtime', 'vendors', 'list']
+  })
+]
+
+
+2. 内容抽离
+
+// webpack.config.js
+
+configs = {...}
+
+const makePlugins = (configs) => {
+  const plugins = [...];
+  
+  Object.keys(configs.entry).forEach(item => {
+    plugins.push(
+      new HtmlWebpackPlugin({
+        template: 'src/index.html',
+        filename: `${item}.html`,
+        chunks: ['runtime', 'vendors', item]
+      })
+    );
+  });
+
+  return plugins;
+}
+configs.plugins = makePlugins(configs);
+
+
+modules.exports = configs;
