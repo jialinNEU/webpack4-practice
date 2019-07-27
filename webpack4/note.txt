@@ -1,0 +1,476 @@
+## 基本介绍
+
+1. Webpack是一个模块打包工具
+  - 可以识别出任意模块引入的语法（ES6 Module， CommonJS等）
+
+2. 全局安装webpack的问题
+1）版本号与项目本身的webpack版本冲突
+
+3. npx介绍
+1）在当前目录下，运行项目内安装的webpack，如：npx Webpack -v/npx webpack index.js
+
+4. webpack-cli
+1）可以在命令行中使用webpack命令
+
+5. webpack打包的输出
+1）Chunks：该文件本身的id，以及其他关联的文件的id值
+  - [emitted]表示这个chunk已经被生成出去了
+2）Chunk Names：该文件本身的文件名，以及其他关联的文件的文件名
+
+6. CSS模块化
+1）在css-loader中配置modules: true实现CSS模块化
+2）公共样式与私有样式混合
+
+import 'common.less';
+<div className="commonstyle"></div>
+
+import style form './compStyle';
+<div className={`commonstyle ${style.property}`}></div>
+
+
+
+
+
+
+
+## Webpack的配置文件（webpack.config.js文件）
+
+### entry和output的配置
+
+1. 打包多个文件
+1）entry使用对象进行配置，output的filename使用[name].js作为文件名
+
+2. output的公共路径
+1）使用publicPath配置公共路径，进而所有打包后的文件被引入时都会有publicPath的值作为前缀
+2）如果配置了publicPath的值话，在 index.html 文件里面也应该做出调整。因为 webpack-dev-server 伺服的文件是相对 publicPath 这个路径的
+    output: {
+      // ...
+      publicPath: '/assets/'
+    }
+
+    <body>
+        <script src="assets/bundle.js"></script>
+    </body>
+
+
+*** 补充：publicPath ***
+
+1. output.publicPath：它是项目中引用css，js，img等资源的基础路径，要配合具体资源中指定的路径使用
+  - 静态资源的最终路径 = output.publicPath + 资源loader或插件等配置的路径
+
+2. devServer和output的publicPath
+  - https://www.jianshu.com/p/cbe81be10d78
+
+  * webpack-dev-server使用的是内存中的打包文件，并不是webpack命令打包后的路径
+  * webpack-dev-server在不设置publicPath的情况下，将默认输出main.js到根目录。
+    输入localhost:8080/main.js就能看到这个Js
+  
+  * 如果require了一些资源，这些资源里包含uri属性（如css中设置img：url('./1.jpg')），
+    就要使用就output的publicPath属性，否则会找不到文件
+    ==> 让webpack在打包时才能根据配置动态修改uri中的相对值的；
+        你不配置，webpack打包后的main.js中引用的url不对。
+
+
+
+
+### SourceMap的配置
+  - 它是一个映射关系，会生成.map文件
+  - 它知道dist目录下main.js的某行，实际上对应src目录下index.js的某行
+  - https://webpack.js.org/configuration/devtool/#root，不同的devtool配置项的性能对比
+  - 生成.map文件的类似一个js对象，其中的mapping属性使用了VLQ编码，是映射的关键所在
+
+1. cheap-source-map
+1）速度比较快，只将错误精确到某行，不精确到某列
+2）只会映射业务代码，不负责第三方模块（如：loader）的代码
+
+2. cheap-module-source-map
+1）不但负责业务代码，也负责映射第三方模块或loader的代码
+
+3. cheap-eval-source-map
+1）eval是运行速度最快的
+2）eval模式是使用eval将webpack中每个模块包裹，然后在模块末尾添加模块来源//# souceURL， 
+  依靠souceURL找到原始代码的位置
+3）不产生单独的.map文件
+
+4. inline
+1）生成的map被合并到打包好的js文件中
+
+5. 最佳实践：
+1）开发环境建议使用cheap-module-eval-source-map的形式，提示错误比较全，打包速度比较快
+2）线上环境建议使用cheap-module-source-map的形式，会生成单独的map文件（不被发布）
+
+
+### WebpackDevServer的配置
+  - 自动打包 + 自动刷新浏览器
+  - 使用http协议打开文件（借助配置open属性）
+  - 支持跨域代理（借助配置proxy属性）
+  - 支持修改端口（借助配置port属性）
+  
+  ** 自建server，见npm run middleware以及server.js ** (需要去webpack文档中nodejs的webpack部分查询)
+
+  1）devServer.contentBase: 指以哪个目录作为静态目录，相对路径的参考
+  2）devServer.publicPath:  指服务器打包资源后的输出路径
+  - https://www.jianshu.com/p/cbe81be10d78
+
+
+
+### Hot Module Replacement(热模块更新)
+  
+1. 热更新允许所有模块被更新，但只有特定部分被刷新
+  - 需要使用webpack.HotModuleReplacementPlugins()以及devServer的hot选项配置
+  - 保留在完全重新加载页面时丢失的应用程序的状态
+  - 只更新改变的内容，以节省开发时间
+
+2. js文件的热更新
+  - 通过if检查module.hot是否开启
+  - 若开启，通过module.hot.accept选取特定js文件，若该文件发生变化则执行相应回调函数
+
+3. css文件的热更新
+  - style-loader使用了module.hot.accept，因此无需重复检查
+
+4. React：React-hot-loader，详见文档
+
+5. HMR原理
+1）实现方式：轮询（http协议服务端无法主动发送请求），Websocket（基于TCP协议，客户端和服务端建立长连接）
+2）原理：
+  - 建立长连接后，当服务器的css/js/html进行了修改的时候，服务器会向前端发送一个更新消息
+  - 若是css或html发生了改变，网页执行js直接操作dom，进行局部刷新
+  - 若是js发生了改变，刷新整个页面
+
+
+
+
+
+### loaders的配置
+  - 使Webpack可以识别非js的文件
+  - 执行顺序：从下到上，从右到左
+
+1. url-loader和file-loader打包图片的区别：
+1）url-loader将图片转换为base64的字符串，然后直接放入打包好的js文件（i.e. bundle.js）中
+2）file-loader将图片打包到相应位置，生成图片文件
+
+2. url-loader的优劣：
+1）优势：减少HTTP的请求，避免再次请求文件
+2）劣势：若图片过大，将导致打包好的js文件也很大，加载时间变长
+3）最佳实践：对于小图片，使用url-loader；对于大图片，使用file-loader
+
+3. css-loader
+1）用于分析几个CSS文件之间的关系，合并成一段CSS代码
+
+4. style-loader
+1）得到css-loader的结果后，将该内容挂在到页面的head部分的style标签上
+
+5. sass-loader和node-sass
+1）先执行sass-loader，后再执行css-loader，最后执行style-loader
+
+6. potcss-loader
+1）需要一个post.config.js配置文件
+2）安装autoprefixer插件，可以自动生成样式前缀
+
+7. csv-loader和xml-loader
+1）用于将csv文件和xml文件打包到js文件中
+
+
+
+
+
+### Plugins的配置
+  - 可以在Webpack运行到某个时刻的时候，帮助做一些辅助的事情
+
+1. html-webpack-plugin
+1）在打包结束后，自动生成一个HTML文件，并把打包生成的js文件自动引入到该html文件中
+2）使用配置template，生成模板HTML文件
+
+2. clean-webpack-plugin
+1）在打包前，先被运行，删除参数指定目录下的所有内容
+
+3. HotModuleReplacementPlugin
+1）允许HMR（热更新）
+
+
+
+
+### development和production模式的区分打包
+
+1. 区别
+- Development模式下SourceMap比较完整，Production模式下SourceMap会更加简洁（或单独生成.map文件）
+- Development模式下代码不进行压缩，Production模式下代码要被压缩
+
+2. 实践
+1）分别创建webpack.dev.js和webpack.prod.js两个配置文件
+2）在package.json的scripts下分别分别创建dev和prod的打包命令
+3）创建webpack.common.js文件，将dev和prod公共部分写入
+4）安装“webpack-merge” (--save-dev)，在dev和prod的配置文件中引入并使用
+
+
+
+### Code Splitting代码分割
+
+1. 解决问题
+- 打包文件过大，加载时间会长
+- 对于大文件而言，一些小的修改会重新进行打包，用户重新加载过大的bundled文件
+
+2. 多个方案
+- 方案A：
+1）创建lodash.js，用于引入lodash库，并挂在到全局变量window中
+2）在webpack配置文件中，添加入口entry文件,将创建的lodash.js放入entry中
+
+    entry: {
+      main: './src/index.js',
+      lodash: './src/lodash.js'
+    },
+
+
+- 方案B：使用官方SplitChunk插件
+1）对于dynamic import第三方库，需要安装@babel/plugin-syntax-dynamic-import，并在.babelrc文件中的plugins中引入
+2）对动态引入的第三方库代码分割后的文件进行重命名：
+  a. 使用magic comment：/* webpackChunkName: "lodash" */ ==> vendors~lodash.js
+    ==> import(/* webpackChunkName: "lodash" */ 'lodash').then
+
+  b. 在output下加入chunkFilename属性，如："[name]-[contenthash:6].js"
+    ==> chunkFilename: '[name]_[contenthash:6].js'
+  
+  最终，打包的名字将是vendors~lodash_***.js
+
+3）对于同步引入的第三方库代码：
+  a. webpack会进入cacheGroups中，根据cacheGroups.test进入相应的cacheGroupName，进行分割打包
+  b. 最终打包的文件名为：vendors~[入口文件名]_[contenthash:6].js
+
+
+// 代码分割，和webpack无关
+// webpack中实现代码分割，两种方式
+// 1. 同步代码： 只需要在webpack.common.js中做optimization的配置即可
+// 2. 异步代码(import): 异步代码，无需做任何配置，会自动进行代码分割，放置到新的文件中
+
+参考文章：https://itnext.io/react-router-and-webpack-v4-code-splitting-using-splitchunksplugin-f0a48f110312
+
+
+
+
+### Lazy Loading懒加载
+
+1. Chunk是什么？
+- 打包出来的每个文件都是一个chunk
+
+
+2. 懒加载是什么？
+- 通过import异步加载一个模块，当执行import的部分的时候，模块才被加载
+- 好处：
+  * 页面加载速度更快
+- React的路由在访问不同地址会展现不同组件，可以将不同页面分别做次webpack的代码分割
+
+
+
+
+### CSS文件代码分割
+
+1. 将CSS文件分离打包出来，而并非打包到js文件中去
+
+2. 使用mini-css-extract-plugin插件，只适合production模式（因为不支持HMR热更新）
+
+3. 使用optimize-css-assets-webpack-plugin进行css代码压缩（同样是在production模式下）
+  - 配置optimizaiton下的minimizer
+  - 同时，需要使用TerserJSPlugin进行js压缩，否则默认的js压缩会被覆盖
+
+    optimization: {
+      minimizer: [
+        // js minimizer
+        new TerserJSPlugin({
+          sourceMap: true,
+        }),
+        // css minimizer
+        new OptimizeCSSAssetsPlugin({})
+      ]
+    }
+
+4. 对于多入口文件的CSS文件代码分割
+
+  optimization: {
+    splitChunks: {
+      cacheGroups: {
+        fooStyles: {
+          name: 'foo',
+          test: (m,c,entry = 'foo') => m.constructor.name === 'CssModule' && recursiveIssuer(m) === entry,
+          chunks: 'all',
+          enforce: true
+        },
+        barStyles: {
+          name: 'bar',
+          test: (m,c,entry = 'bar') => m.constructor.name === 'CssModule' && recursiveIssuer(m) === entry,
+          chunks: 'all',
+          enforce: true
+        }
+      }
+    }
+  }
+
+https://webpack.js.org/plugins/mini-css-extract-plugin/#minimizing-for-production
+
+
+
+
+
+## Babel处理ES6语法（.babelrc文件）
+
+1. 当使用babel-loader处理es6文件时，webpack和babel连接起来，需要借助.babelrc来翻译es6语法
+  - babel-preset-env就是借助的模块，见module下的"test:/.js$/"
+
+2. @babel/polyfill
+  - 用来弥补低版本浏览器不存在的一些内容
+  - 它会在全局环境window上绑定一些模块，如：window.Promise等
+  - 在js文件的顶部引入：import "@babel/polyfill"（当@babel/preset-env配置useBuiltIns值为usage的时候，无需重复引入）
+
+3. @babel/plugin-transform-runtime和@babel/runtime
+  - 将ES6中内置的一些模块加入进来，比如Promise,Proxy,这些有些浏览器中没有，所有需要导入
+  - 有效避免polyfill污染全局环境的问题，plugin-transform-runtime以闭包形式去注入对应内容，更适用于类库开发
+
+4. @babel/preset-env
+  - 将ES6转换为ES5的语法
+  - 在业务代码中使用
+
+5. @babel/preset-react
+  - presets数组中是有执行顺序的，由下而上（从右往左）执行
+
+
+对于如下的.babelrc文件，
+
+{
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": {
+        "chrome": "67",
+      },
+      "useBuiltIns": "usage",
+      "corejs": 3
+    }],
+    "@babel/preset-react",
+
+  ],
+  
+  "plugins": [
+    ["@babel/plugin-transform-runtime", {
+      "corejs": 2,
+      "helpers": true,
+      "regenerator": true,
+      "useESModules": false
+    }]
+  ]
+  
+}
+
+Webpack会按右到左，下到上的执行顺序。最终，会用preset处理，但是preset本质上就是一组plugin的集合
+
+
+
+
+## TreeShaking
+
+1. 概念：将一个模块中没有用处的东西全部摇晃掉（只打包import的部分，若引入的模块没有导出内容则也会被忽略，如：import './style.css'）
+  - 只支持ES Module的模块引入（i.e. import方式）
+
+2. 实现：配置“optimization”字段，值为usedExports: true
+  - 在package.json中配置sideEffects: [*.css]，避免TreeShaking掉类似CSS文件的引入
+
+3. TreeShaking在开发环境中不会起作用，生产环境下默认开启
+
+
+## package.json配置
+1. "private": true      ==> 不发布到npm仓库中
+2. "main": index.js     ==> 向外暴露的JS文件
+3. "scripts": {
+  "bundle": "webpack"   ==> npm run bundle执行npx webpack --config webpack.config.js
+  "watch": "webpack --watch"  ==> 自动重新打包
+}
+4. "sideEffects": [...] ==> 使TreeShaking不作用于数组中的模块 
+   "sideEffects": false ==> TreeShaking作用于所有模块，没有例外内容
+
+
+
+
+## 打包分析 + Preloading + Prefetching
+
+1. 打包分析
+方案1
+1）通过在package.json中加入webpack --profile --json > stats.json，将打包的过程描述放置到stats.json文件中
+2）在http://webpack.github.io/analyse/上，上传生成的stats.json，进行分析
+
+方案2
+1）同样生成stats.json文件
+2）在https://alexkuz.github.io/webpack-chart/上，上传生成的stats.json，进行分析
+
+方案3
+1）安装webpack-bundle-analyzer插件，npm install -D webpack-bundle-analyzer
+2）const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+3）在webpack配置文件的plugins中，加入new BundleAnalyzerPlugin()
+
+
+2. Preloading + Prefetching
+A. 解决问题：
+1）F12打开控制台，Ctrl+Shift+p打开命令输入框，搜索show coverage
+2）查看代码利用率
+3）结果 ==> 多使用异步代码，按需加载
+4）问题 ==> 当用户交互时候再进行按需加载，可能会导致加载速度变慢
+
+B. 解决方法：
+1）使用magic comment语法，在网络空闲的时候，会提前加载好所需的click.js文件，在浏览器本地创建缓存
+    
+    import(/* webpackPrefetch: true */'./click').then(({default: func}) => {
+      func("Eddie Gao");
+    });
+
+2）Prefetch和Preload的区别
+a. Prefetch在核心代码加载完成后，页面空闲的时候去加载其他的代码，在浏览器上可能有兼容性问题
+b. Preload和核心代码一起加载（/* webpackPreload: true */)
+
+https://webpack.js.org/guides/code-splitting/#prefetchingpreloading-modules
+
+
+
+
+## Webpack与浏览器缓存
+
+1. 问题
+  - 假设在服务器上，浏览器加载完js文件后，浏览器会缓存该js文件。若此时修改js文件，打包出的js文件的文件名不变，浏览器会使用缓存，而非新的js文件
+
+2. 解决方案
+  - 使用contenthash对打包好的文件进行命名
+
+    output: {
+      filename: '[name].[contenthash:6].js',
+      chunkFilename: '[name].[contenthash:6].chunk.js',
+    },
+
+
+
+## Shimming（垫片）
+
+1. 问题
+  - 解决webpack打包的兼容性问题
+  - 假设a.js中引入jquery库并使用，b.js未引入jquery库单使用了jquery，a.js引入b.js并使用，会报错（b.js中的jquery是undefined）
+
+2. 解决方案
+1) 在webpack的配置文件中，在plugins里加入new webpack.ProvidePlugin({$: 'jquery'})
+
+3. 如何将所有js文件中的this都指向window？
+  - 安装imports-loader：npm install -D imports-loader
+  - 在webpack的配置文件中，修改修饰js文件的loader
+
+        use: [
+          {loader: 'babel-loader'},
+          {loader: 'imports-loader?this=>window'}
+        ],
+
+
+
+## 环境变量的用法
+
+详情见4-12节，主要关于env环境变量通过package.json中--env.production或--env.development传入
+
+
+
+
+
+
+
+
+TODO: Webpack中的publicPath

@@ -1,0 +1,27 @@
+# 创建一个Loader
+
+Loader API -- Webpack Docs
+
+Loader用于处理某个模块
+
+Loader的定义形式是一个函数（非箭头函数！）
+
+使用场景：
+
+1) 在loader中进行try-catch的捕获，避免修改业务代码
+
+try(function(){
+  // ...
+})catch(e) {
+  // ...
+}
+
+2) 在loader中进行国际化处理
+
+if (NodeGlobalVariable === '中文') {
+  source.replace('{{title}}', '中文标题');
+} else {
+  source.replace('{{title}}', 'English Title');
+}
+
+

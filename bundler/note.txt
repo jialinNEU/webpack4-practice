@@ -1,0 +1,10 @@
+# 类webpack的bundler工具
+
+** cli-highlight对命令行code高亮
+
+所需第三方库：
+- @babel/parser
+- @babel/traverse (引入时需要加default)
+- @babel/core
+- @babel/preset-env
+

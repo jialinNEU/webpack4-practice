@@ -1,0 +1,29 @@
+# 创建一个Plugin
+
+插件的定义形式是一个函数
+
+基本结构：
+
+class CopyrightWebpackPlugin {
+  constructor () {
+
+  }
+  
+  apply(compiler) {
+
+  }
+}
+
+module.exports = CopyrightWebpackPlugin;
+
+
+使用node环境查看compilation
+
+// package.json
+// --inspect: 开启node调试工具
+// --inspect-brk: 在webpack执行的时候，第一行打一个断点
+"debug": "node --inspect --inspect-brk node_modules/webpack/bin/webpack.js"
+
+在plugin文件中加入debugger
+
+之后进行浏览器的控制台，再进入node debug模式查看
